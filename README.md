@@ -18,7 +18,7 @@
 
 ## 使用方法
 
-直接用浏览器打开 3D 粒子文字动画 即可，无需安装任何依赖。
+直接用浏览器打开 [3D 粒子文字动画](https://tengyanhaiin-star.github.io/Words-of-Particles/) 即可，无需安装任何依赖。
 
 ### 自定义文字
 
