@@ -1,0 +1,1298 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="mobile-web-app-capable" content="yes">
+    <title>3D Particle Text — Custom</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Bebas+Neue&family=Noto+Sans+SC:wght@300;400&display=swap');
+
+        * { margin: 0; padding: 0; overflow: hidden; box-sizing: border-box; }
+        body {
+            background: #000;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+        }
+        canvas { display: block; }
+
+        /* ── iOS 安全区域 & 触摸优化 ── */
+        * { -webkit-tap-highlight-color: transparent; }
+        canvas { touch-action: none; } /* canvas 不处理默认触摸手势 */
+        body { padding-bottom: env(safe-area-inset-bottom); }
+
+        /* ── Music Controls ── */
+        .music-controls {
+            position: fixed;
+            bottom: calc(16px + env(safe-area-inset-bottom));
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 100;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            align-items: center;
+            justify-content: center;
+            background: rgba(255,255,255,0.08);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            padding: 12px 16px;
+            border-radius: 20px;
+            border: 1px solid rgba(255,255,255,0.15);
+            max-width: calc(100vw - 32px);
+            box-sizing: border-box;
+        }
+        .music-controls button,
+        .music-controls label {
+            background: rgba(255,255,255,0.15);
+            border: 1px solid rgba(255,255,255,0.25);
+            color: white;
+            padding: 10px 18px;
+            min-height: 44px;
+            border-radius: 25px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.25s;
+            font-family: 'Space Mono', 'Noto Sans SC', sans-serif;
+            display: flex;
+            align-items: center;
+            white-space: nowrap;
+        }
+        .music-controls button:hover,
+        .music-controls label:hover {
+            background: rgba(255,255,255,0.28);
+            transform: scale(1.05);
+        }
+        .music-controls input[type="file"] { display: none; }
+        .music-controls .filename {
+            color: rgba(255,255,255,0.7);
+            font-size: 12px;
+            max-width: 160px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            font-family: 'Space Mono', 'Noto Sans SC', sans-serif;
+        }
+        .music-controls input[type="range"] { width: 90px; cursor: pointer; }
+        .music-controls input[type="range"]:disabled { opacity: 0.3; cursor: not-allowed; }
+
+        /* ── Edit Button ── */
+        #edit-btn {
+            position: fixed;
+            top: calc(16px + env(safe-area-inset-top));
+            right: calc(16px + env(safe-area-inset-right));
+            z-index: 200;
+            background: rgba(255,255,255,0.1);
+            border: 1px solid rgba(255,255,255,0.25);
+            color: white;
+            padding: 10px 20px;
+            min-height: 44px;
+            border-radius: 25px;
+            cursor: pointer;
+            font-family: 'Space Mono', 'Noto Sans SC', sans-serif;
+            font-size: 13px;
+            letter-spacing: 1px;
+            transition: all 0.3s;
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            display: flex;
+            align-items: center;
+        }
+        #edit-btn:hover {
+            background: rgba(255,255,255,0.22);
+            transform: scale(1.05);
+        }
+
+        /* ── Modal Overlay ── */
+        #modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.75);
+            backdrop-filter: blur(6px);
+            -webkit-backdrop-filter: blur(6px);
+            z-index: 300;
+            display: flex;
+            align-items: flex-start;
+            justify-content: center;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.35s;
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
+            padding: calc(20px + env(safe-area-inset-top)) 0 calc(20px + env(safe-area-inset-bottom));
+        }
+        #modal-overlay.visible {
+            opacity: 1;
+            pointer-events: all;
+        }
+
+        /* ── Modal Panel ── */
+        .modal-panel {
+            background: #0d0d0d;
+            border: 1px solid rgba(255,255,255,0.12);
+            border-radius: 20px;
+            padding: 36px 40px 32px;
+            width: min(560px, 92vw);
+            box-shadow: 0 0 60px rgba(255,255,255,0.04), 0 20px 60px rgba(0,0,0,0.8);
+            transform: translateY(20px) scale(0.97);
+            transition: transform 0.35s cubic-bezier(0.34,1.56,0.64,1);
+        }
+        #modal-overlay.visible .modal-panel {
+            transform: translateY(0) scale(1);
+        }
+
+        .modal-title {
+            font-family: 'Bebas Neue', sans-serif;
+            font-size: 26px;
+            letter-spacing: 4px;
+            color: #fff;
+            margin-bottom: 6px;
+        }
+        .modal-subtitle {
+            font-family: 'Space Mono', 'Noto Sans SC', sans-serif;
+            font-size: 11px;
+            color: rgba(255,255,255,0.35);
+            letter-spacing: 1px;
+            margin-bottom: 30px;
+        }
+
+        .input-group {
+            margin-bottom: 24px;
+        }
+        .input-label {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+            margin-bottom: 8px;
+        }
+        .input-label span {
+            font-family: 'Space Mono', 'Noto Sans SC', sans-serif;
+            font-size: 11px;
+            letter-spacing: 2px;
+            color: rgba(255,255,255,0.5);
+            text-transform: uppercase;
+        }
+        .input-label .hint {
+            font-size: 10px;
+            color: rgba(255,255,255,0.25);
+            letter-spacing: 0.5px;
+        }
+
+        .text-input {
+            width: 100%;
+            background: rgba(255,255,255,0.04);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 10px;
+            padding: 12px 16px;
+            color: #fff;
+            font-family: 'Space Mono', 'Noto Sans SC', sans-serif;
+            font-size: 15px;
+            letter-spacing: 3px;
+            resize: none;
+            outline: none;
+            transition: border-color 0.2s, background 0.2s;
+            line-height: 1.7;
+            min-height: 54px;
+        }
+        .text-input:focus {
+            border-color: rgba(255,255,255,0.35);
+            background: rgba(255,255,255,0.07);
+        }
+        .text-input.error {
+            border-color: rgba(255,80,80,0.7);
+        }
+
+        .char-counters {
+            display: flex;
+            flex-direction: column;
+            gap: 3px;
+            margin-top: 6px;
+        }
+        .char-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-family: 'Space Mono', 'Noto Sans SC', sans-serif;
+            font-size: 10px;
+        }
+        .char-row .line-label {
+            color: rgba(255,255,255,0.25);
+            width: 36px;
+            flex-shrink: 0;
+        }
+        .char-bar-wrap {
+            flex: 1;
+            height: 3px;
+            background: rgba(255,255,255,0.08);
+            border-radius: 2px;
+            overflow: hidden;
+        }
+        .char-bar {
+            height: 100%;
+            border-radius: 2px;
+            transition: width 0.15s, background 0.15s;
+            background: rgba(120,220,255,0.7);
+        }
+        .char-bar.warn { background: rgba(255,200,60,0.8); }
+        .char-bar.over { background: rgba(255,70,70,0.9); }
+        .char-count-num {
+            color: rgba(255,255,255,0.3);
+            width: 44px;
+            text-align: right;
+            flex-shrink: 0;
+        }
+        .char-count-num.over { color: rgba(255,100,100,0.9); }
+
+        .error-msg {
+            font-family: 'Space Mono', 'Noto Sans SC', sans-serif;
+            font-size: 10px;
+            color: rgba(255,100,100,0.8);
+            margin-top: 5px;
+            min-height: 14px;
+            letter-spacing: 0.5px;
+        }
+
+        .modal-divider {
+            border: none;
+            border-top: 1px solid rgba(255,255,255,0.07);
+            margin: 8px 0 24px;
+        }
+
+        .modal-actions {
+            display: flex;
+            gap: 12px;
+            justify-content: flex-end;
+        }
+        .btn-cancel {
+            background: transparent;
+            border: 1px solid rgba(255,255,255,0.15);
+            color: rgba(255,255,255,0.5);
+            padding: 11px 24px;
+            min-height: 44px;
+            border-radius: 25px;
+            cursor: pointer;
+            font-family: 'Space Mono', 'Noto Sans SC', sans-serif;
+            font-size: 12px;
+            letter-spacing: 1px;
+            transition: all 0.25s;
+        }
+        .btn-cancel:hover {
+            border-color: rgba(255,255,255,0.3);
+            color: rgba(255,255,255,0.8);
+        }
+        .btn-apply {
+            background: linear-gradient(135deg, rgba(120,220,255,0.25), rgba(180,120,255,0.25));
+            border: 1px solid rgba(150,200,255,0.35);
+            color: #fff;
+            padding: 11px 28px;
+            min-height: 44px;
+            border-radius: 25px;
+            cursor: pointer;
+            font-family: 'Space Mono', 'Noto Sans SC', sans-serif;
+            font-size: 12px;
+            letter-spacing: 1.5px;
+            transition: all 0.25s;
+        }
+        .btn-apply:hover:not(:disabled) {
+            background: linear-gradient(135deg, rgba(120,220,255,0.4), rgba(180,120,255,0.4));
+            transform: scale(1.03);
+        }
+        .btn-apply:disabled {
+            opacity: 0.3;
+            cursor: not-allowed;
+        }
+        /* ── 横屏适配 ── */
+        @media (orientation: landscape) and (max-height: 500px) {
+            .music-controls {
+                bottom: auto;
+                top: 50%;
+                left: calc(12px + env(safe-area-inset-left));
+                right: auto;
+                transform: translateY(-50%);
+                flex-direction: column;
+                align-items: stretch;
+                padding: 10px 12px;
+                max-width: 140px;
+                border-radius: 16px;
+            }
+            .music-controls .filename {
+                max-width: 120px;
+                font-size: 10px;
+            }
+            .music-controls input[type="range"] {
+                width: 100%;
+            }
+            #edit-btn {
+                top: calc(10px + env(safe-area-inset-top));
+                right: calc(10px + env(safe-area-inset-right));
+                padding: 8px 14px;
+                font-size: 11px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="music-controls">
+        <label for="music-upload">🎵 选择音乐</label>
+        <input type="file" id="music-upload" accept="audio/mpeg,audio/mp4,audio/wav,audio/ogg,audio/aac,audio/flac,.mp3,.mp4,.m4a,.wav,.ogg,.aac,.flac">
+        <span class="filename" id="filename">未选择文件</span>
+        <button id="play-pause">▶️ 播放</button>
+        <input type="range" id="volume" min="0" max="100" value="50">
+        <span style="color: white; font-size: 14px;">🔊</span>
+    </div>
+
+    <!-- Edit Button -->
+    <button id="edit-btn">✏️ CUSTOMIZE</button>
+
+    <!-- Modal -->
+    <div id="modal-overlay">
+        <div class="modal-panel">
+            <div class="modal-title">CUSTOMIZE TEXT</div>
+            <div class="modal-subtitle">宽度上限 14 · 汉字占 2 英文占 1 · 最多 4 行 · Enter 换行</div>
+            <hr class="modal-divider">
+
+            <!-- Group 1 -->
+            <div class="input-group">
+                <div class="input-label">
+                    <span>词组 1</span>
+                    <span class="hint">第一屏显示</span>
+                </div>
+                <textarea class="text-input" id="input1" rows="4" placeholder="第1行&#10;第2行 (可选)&#10;第3行 (可选)&#10;第4行 (可选)" maxlength="200"></textarea>
+                <div class="char-counters" id="counters1"></div>
+                <div class="error-msg" id="error1"></div>
+            </div>
+
+            <!-- Group 2 -->
+            <div class="input-group">
+                <div class="input-label">
+                    <span>词组 2</span>
+                    <span class="hint">第二屏显示</span>
+                </div>
+                <textarea class="text-input" id="input2" rows="4" placeholder="第1行&#10;第2行 (可选)&#10;第3行 (可选)&#10;第4行 (可选)" maxlength="200"></textarea>
+                <div class="char-counters" id="counters2"></div>
+                <div class="error-msg" id="error2"></div>
+            </div>
+
+            <div class="modal-actions">
+                <button class="btn-cancel" id="btn-cancel">取消</button>
+                <button class="btn-apply" id="btn-apply">APPLY →</button>
+            </div>
+        </div>
+    </div>
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    
+    <script>
+        let scene, camera, renderer;
+        let particleSystem1, particleSystem2; // 两个独立的粒子系统
+        let targetPositions1 = []; // DAYBETTER的目标位置
+        let targetPositions2 = []; // LIGHT UP YOUR LIFE的目标位置
+        let currentTarget = 1; // 当前显示的目标 (1 或 2)
+        let isDispercing = false;
+        let lastToggleTime = 0;
+        let isInitialized = false;
+        const DISPLAY_TIME = 3000; // 显示时间
+        const DISPERSE_TIME = 2000; // 散开时间
+        
+        // 两组粒子的中心位置
+        const CENTER1 = { x: -120, y: 0, z: 0 }; // DAYBETTER中心
+        const CENTER2 = { x: 120, y: 0, z: 0 };  // LIGHT UP YOUR LIFE中心
+        
+        // 摄像机目标位置
+        let cameraTargetX = CENTER1.x;
+        let cameraTargetY = 0;
+        let cameraCurrentX = CENTER1.x;
+        let cameraCurrentY = 0;
+        
+        // 音乐控制
+        const musicUpload = document.getElementById('music-upload');
+        const playPauseBtn = document.getElementById('play-pause');
+        const volumeSlider = document.getElementById('volume');
+        const filenameSpan = document.getElementById('filename');
+        
+        // 初始化时禁用音量滑块
+        volumeSlider.disabled = true;
+        
+        let audioContext, audioBuffer, sourceNode, gainNode, analyser, dataArray;
+        let isPlaying = false;
+        let pausedAt = 0;
+        let startedAt = 0;
+        
+        // 音乐响应变量
+        let overallLevel = 0;
+        
+        // 初始化 Audio Context
+        function initAudioContext() {
+            if (!audioContext) {
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                gainNode = audioContext.createGain();
+                gainNode.gain.value = 0.5;
+                analyser = audioContext.createAnalyser();
+                analyser.fftSize = 256; // 更小的FFT，iOS计算更快
+                analyser.smoothingTimeConstant = 0.5; // 降低平滑，响应更灵敏
+                gainNode.connect(audioContext.destination);
+                analyser.connect(gainNode);
+                const bufferLength = analyser.frequencyBinCount;
+                dataArray = new Uint8Array(bufferLength);
+                console.log('✅ Web Audio API 已初始化');
+            }
+        }
+        
+        // 分析音频
+        function analyzeAudio() {
+            if (!analyser || !isPlaying) {
+                overallLevel = 0;
+                return;
+            }
+            
+            analyser.getByteFrequencyData(dataArray);
+            const length = dataArray.length;
+            let sum = 0;
+            for (let i = 0; i < length; i++) {
+                sum += dataArray[i];
+            }
+            overallLevel = sum / (length * 255);
+        }
+        
+        // 文件选择
+        musicUpload.addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            
+            filenameSpan.textContent = '加载中...';
+            playPauseBtn.disabled = true;
+
+            // iOS 兼容：AudioContext 延迟到用户点击播放按钮时创建
+            // 这里只读取文件，不创建 AudioContext
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                // 暂存原始 ArrayBuffer，等播放按钮点击时再解码
+                window._pendingAudioData = e.target.result;
+                window._pendingFileName = file.name;
+                filenameSpan.textContent = file.name;
+                playPauseBtn.disabled = false;
+                playPauseBtn.textContent = '▶️ 播放';
+                // 停止当前播放
+                if (sourceNode) {
+                    try { sourceNode.stop(); } catch(e) {}
+                    sourceNode = null;
+                }
+                audioBuffer = null;
+                isPlaying = false;
+                pausedAt = 0;
+            };
+            reader.onerror = function() {
+                alert('文件读取失败！');
+                filenameSpan.textContent = '读取失败';
+                playPauseBtn.disabled = false;
+            };
+            reader.readAsArrayBuffer(file);
+        });
+        
+        // 播放
+        function play() {
+            if (!audioBuffer) return;
+            sourceNode = audioContext.createBufferSource();
+            sourceNode.buffer = audioBuffer;
+            sourceNode.connect(analyser);
+            sourceNode.loop = true;
+            sourceNode.start(0, pausedAt);
+            startedAt = audioContext.currentTime - pausedAt;
+            isPlaying = true;
+            playPauseBtn.textContent = '⏸️ 暂停';
+            console.log('▶️ 开始播放');
+        }
+        
+        // 暂停
+        function pause() {
+            if (!sourceNode || !isPlaying) return;
+            pausedAt = (audioContext.currentTime - startedAt) % audioBuffer.duration;
+            sourceNode.stop();
+            sourceNode = null;
+            isPlaying = false;
+            playPauseBtn.textContent = '▶️ 播放';
+            console.log('⏸️ 已暂停');
+        }
+        
+        // 播放/暂停按钮
+        playPauseBtn.addEventListener('click', function() {
+            if (!window._pendingAudioData && !audioBuffer) {
+                alert('请先选择音乐文件！');
+                return;
+            }
+
+            // iOS 兼容：在用户手势内创建/恢复 AudioContext
+            if (!audioContext) {
+                initAudioContext();
+            }
+            if (audioContext.state === 'suspended') {
+                audioContext.resume();
+            }
+
+            // 如果有待解码的新文件，先解码再播放
+            if (window._pendingAudioData) {
+                const data = window._pendingAudioData;
+                window._pendingAudioData = null;
+                playPauseBtn.disabled = true;
+                playPauseBtn.textContent = '解码中...';
+                audioContext.decodeAudioData(data)
+                    .then(buffer => {
+                        if (sourceNode) {
+                            try { sourceNode.stop(); } catch(e) {}
+                            sourceNode = null;
+                        }
+                        audioBuffer = buffer;
+                        pausedAt = 0;
+                        volumeSlider.disabled = false;
+                        playPauseBtn.disabled = false;
+                        play();
+                    })
+                    .catch(err => {
+                        console.error('❌ 音频解码失败:', err);
+                        alert('音频解码失败！请尝试其他音频文件。');
+                        playPauseBtn.disabled = false;
+                        playPauseBtn.textContent = '▶️ 播放';
+                    });
+                return;
+            }
+
+            if (isPlaying) {
+                pause();
+            } else {
+                play();
+            }
+        });
+        
+        // 音量控制
+        volumeSlider.addEventListener('input', function() {
+            if (gainNode) {
+                gainNode.gain.value = this.value / 100;
+            }
+        });
+        
+        // 创建圆形纹理
+        function createCircleTexture() {
+            const canvas = document.createElement('canvas');
+            canvas.width = 64;
+            canvas.height = 64;
+            const ctx = canvas.getContext('2d');
+            ctx.clearRect(0, 0, 64, 64);
+            const gradient = ctx.createRadialGradient(32, 32, 0, 32, 32, 32);
+            gradient.addColorStop(0, 'rgba(255, 255, 255, 1)');
+            gradient.addColorStop(0.4, 'rgba(255, 255, 255, 1)');
+            gradient.addColorStop(0.7, 'rgba(255, 255, 255, 0.5)');
+            gradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, 64, 64);
+            const texture = new THREE.Texture(canvas);
+            texture.needsUpdate = true;
+            return texture;
+        }
+        
+        // ── 通用文字点生成函数 ──────────────────────────────────────────
+        // lines: string[]  每组1~4行，每行最多MAX_CHARS字符
+        const MAX_CHARS = 14;
+        const MAX_LINES = 4;
+
+        function generatePoints(lines) {
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+
+            // 固定字号，让 canvas 高度跟着行数增长
+            const fontSize  = 100;
+            const lineHeight = Math.round(fontSize * 1.4);
+            const paddingX = 80;
+            const paddingY = 50;
+
+            // 跨平台细体字体栈：直接用各系统 Light 字体的完整名称
+            // Mac:     PingFang SC Light / Hiragino Sans W2
+            // Windows: Microsoft YaHei UI Light
+            // Linux/Android: Noto Sans CJK SC Light (本地安装)
+            // 兜底:    系统默认 sans-serif（至少保证可读）
+            const fontFamilies = [
+                '"Noto Sans SC"',           // Google Fonts 思源黑体，优先
+                '"PingFang SC Light"',
+                '"PingFang SC"',
+                '"Hiragino Sans GB W3"',
+                '"Hiragino Sans GB"',
+                '"Microsoft YaHei UI Light"',
+                '"Microsoft YaHei UI"',
+                '"Noto Sans CJK SC Light"',
+                'sans-serif'
+            ].join(', ');
+            const fontStr = `300 ${fontSize}px ${fontFamilies}`;
+
+            // ── 先用固定尺寸 canvas 预渲染，强制浏览器解析字体 ──
+            // 正式绘制前字体必须已被解析，否则第一次会回退到系统默认字体
+            const preCanvas = document.createElement('canvas');
+            preCanvas.width = 800; preCanvas.height = 400;
+            const preCtx = preCanvas.getContext('2d');
+            preCtx.font = fontStr;
+            preCtx.fillStyle = 'white';
+            lines.forEach((line, i) => preCtx.fillText(line, 0, 100 + i * lineHeight));
+            // 强制完成光栅化
+            preCtx.getImageData(0, 0, preCanvas.width, preCanvas.height);
+
+            // ── 正式绘制：此时字体已被解析，canvas.width 重置也不影响 ──
+            // 测量最宽一行
+            ctx.font = fontStr;
+            let maxW = 0;
+            lines.forEach(line => {
+                const w = ctx.measureText(line).width;
+                if (w > maxW) maxW = w;
+            });
+
+            canvas.width  = Math.max(maxW + paddingX * 2, 200);
+            const totalH  = fontSize + (lines.length - 1) * lineHeight;
+            canvas.height = Math.max(totalH + paddingY * 2, 200);
+
+            ctx.fillStyle = 'black';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.font = fontStr;
+            ctx.letterSpacing = '6px';
+            ctx.fillStyle = 'white';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+
+            const startY = (canvas.height - totalH) / 2 + fontSize / 2;
+            lines.forEach((line, i) => {
+                ctx.fillText(line, canvas.width / 2, startY + i * lineHeight);
+            });
+
+            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            const pixels = imageData.data;
+            const points = [];
+            const sampling = 2;
+            const zLayers = 3;
+
+            for (let y = 0; y < canvas.height; y += sampling) {
+                for (let x = 0; x < canvas.width; x += sampling) {
+                    const idx = (y * canvas.width + x) * 4;
+                    if (pixels[idx+3] > 250 && pixels[idx] > 250 && pixels[idx+1] > 250 && pixels[idx+2] > 250) {
+                        const hue = (x / canvas.width) * 300;
+                        for (let layer = 0; layer < zLayers; layer++) {
+                            const zDepth = (layer / (zLayers - 1) - 0.5) * 2;
+                            const lightness = 0.5 + zDepth * 0.3;
+                            points.push({
+                                x: (x - canvas.width / 2) * 0.08,
+                                y: -(y - canvas.height / 2) * 0.08,
+                                z: zDepth,
+                                color: new THREE.Color().setHSL(hue / 360, 1.0, lightness)
+                            });
+                        }
+                    }
+                }
+            }
+            return points;
+        }
+
+        // 解析用户输入 → string[]（1~4行，每行截断到MAX_CHARS）
+        function parseLines(raw) {
+            return raw.split('\n')
+                      .map(l => l.trim().slice(0, MAX_CHARS))
+                      .filter(l => l.length > 0)
+                      .slice(0, MAX_LINES);
+        }
+        
+        // 创建粒子系统（可选：直接用散开目标位置初始化）
+        function createParticleSystem(targets, centerX, useDispersePositions = false) {
+            const particleCount = targets.length;
+            const geometry = new THREE.BufferGeometry();
+            const positions = new Float32Array(particleCount * 3);
+            const colors = new Float32Array(particleCount * 3);
+            const velocities = new Float32Array(particleCount * 3);
+            const lightnesses = new Float32Array(particleCount);
+            const baseHues = new Float32Array(particleCount);
+
+            // 预先生成散开位置（和 generateDisperseTargets 逻辑完全一致）
+            const disperseCenterX = centerX < 0 ? -60 : 60;
+
+            for (let i = 0; i < particleCount; i++) {
+                const i3 = i * 3;
+
+                if (useDispersePositions) {
+                    // 用和 generateDisperseTargets 完全相同的逻辑生成初始位置
+                    const theta = Math.random() * Math.PI * 2;
+                    const phi = Math.acos(2 * Math.random() - 1);
+                    const radius = Math.random() * 80;
+                    positions[i3]     = disperseCenterX + radius * Math.sin(phi) * Math.cos(theta);
+                    positions[i3 + 1] = radius * Math.sin(phi) * Math.sin(theta);
+                    positions[i3 + 2] = radius * Math.cos(phi);
+                } else {
+                    const theta = Math.random() * Math.PI * 2;
+                    const phi = Math.acos(2 * Math.random() - 1);
+                    const radius = 60 + Math.random() * 80;
+                    positions[i3]     = centerX + radius * Math.sin(phi) * Math.cos(theta) + (Math.random() - 0.5) * 40;
+                    positions[i3 + 1] = radius * Math.sin(phi) * Math.sin(theta) + (Math.random() - 0.5) * 40;
+                    positions[i3 + 2] = radius * Math.cos(phi) + (Math.random() - 0.5) * 40;
+                }
+                
+                const target = targets[i];
+                if (target && target.color) {
+                    colors[i3] = target.color.r;
+                    colors[i3 + 1] = target.color.g;
+                    colors[i3 + 2] = target.color.b;
+                    
+                    // 提取并保存初始亮度和色相（用于彩虹流动时保持固定）
+                    const hsl = {};
+                    target.color.getHSL(hsl);
+                    lightnesses[i] = hsl.l;
+                    baseHues[i] = hsl.h * 360; // 保存色相（0-360度）
+                }
+                
+                velocities[i3] = 0;
+                velocities[i3 + 1] = 0;
+                velocities[i3 + 2] = 0;
+            }
+            
+            geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+            geometry.setAttribute('velocity', new THREE.BufferAttribute(velocities, 3));
+            geometry.setAttribute('lightness', new THREE.BufferAttribute(lightnesses, 1)); // 添加亮度属性
+            geometry.setAttribute('baseHue', new THREE.BufferAttribute(baseHues, 1)); // 添加基础色相属性
+            
+            const material = new THREE.PointsMaterial({
+                size: 0.5, // 细化粒子，避免笔画糊成一团
+                vertexColors: true,
+                transparent: true,
+                opacity: 1.0,
+                blending: THREE.NormalBlending,
+                depthWrite: false,
+                sizeAttenuation: true,
+                map: createCircleTexture()
+            });
+            
+            const system = new THREE.Points(geometry, material);
+            system.userData = {
+                targets: targets,
+                centerX: centerX,
+                isFormed: false,
+                formedTime: 0,
+                almostFormed: null
+            };
+            
+            return system;
+        }
+        
+        // 初始化
+        function init() {
+            scene = new THREE.Scene();
+            scene.fog = new THREE.FogExp2(0x000000, 0.001);
+            
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.set(CENTER1.x, 0, 50);
+            camera.lookAt(CENTER1.x, 0, 0);
+            
+            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(window.devicePixelRatio);
+            renderer.setClearColor(0x000000);
+            document.body.appendChild(renderer.domElement);
+            
+            targetPositions1 = generatePoints(['1234567890', 'lazy dogs jump', 'over the quick', 'brown fox.']);
+            targetPositions2 = generatePoints(['两个黄鹂鸣翠柳', '一行白鹭上青天', '窗含西岭千秋雪', '门泊东吴万里船']);
+            
+            particleSystem1 = createParticleSystem(targetPositions1, CENTER1.x, true);
+            particleSystem2 = createParticleSystem(targetPositions2, CENTER2.x, true);
+
+            scene.add(particleSystem1);
+            scene.add(particleSystem2);
+
+            // 粒子已在散开位置，直接开始汇聚（和后续切换完全一致）
+            const now = Date.now();
+            particleSystem1.userData.convergeStartTime = now;
+            particleSystem2.userData.convergeStartTime = now;
+            isDispercing = false;
+            currentTarget = 1;
+            lastToggleTime = now;
+
+            window.addEventListener('resize', onWindowResize);
+
+            console.log('✅ 双粒子系统已初始化');
+            console.log('   System 1 粒子数:', targetPositions1.length);
+            console.log('   System 2 粒子数:', targetPositions2.length);
+        }
+        
+        // 切换粒子状态
+        
+        // 生成散开目标
+        function generateDisperseTargets(system) {
+            const particleCount = system.userData.targets.length;
+            const centerX = system.userData.centerX;
+            system.userData.disperseTarget = [];
+            
+            // 根据系统位置决定散开球体中心
+            // 左边系统(centerX=-120) → 散开到(-60, 0)
+            // 右边系统(centerX=+120) → 散开到(+60, 0)
+            const disperseCenterX = centerX < 0 ? -60 : 60;
+            
+            for (let i = 0; i < particleCount; i++) {
+                // 为每个粒子生成球体内的随机目标点
+                const theta = Math.random() * Math.PI * 2;
+                const phi = Math.acos(2 * Math.random() - 1);
+                const radius = Math.random() * 80; // 球体半径80
+                
+                system.userData.disperseTarget[i] = {
+                    x: disperseCenterX + radius * Math.sin(phi) * Math.cos(theta),
+                    y: radius * Math.sin(phi) * Math.sin(theta),
+                    z: radius * Math.cos(phi)
+                };
+            }
+        }
+        
+        // 更新彩虹流动颜色 - 固定速度
+        function updateRainbowColors(system, targets) {
+            const colors = system.geometry.attributes.color.array;
+            const lightnesses = system.geometry.attributes.lightness.array;
+            const baseHues = system.geometry.attributes.baseHue.array;
+            const time = Date.now() * 0.001; // 转换为秒
+            const particleCount = targets.length;
+            
+            // 固定流动速度: 60度/秒 (6秒一圈)
+            const flowSpeed = 60;
+            
+            // 累积时间偏移
+            const timeOffset = (time * flowSpeed) % 360;
+            
+            for (let i = 0; i < particleCount; i++) {
+                const i3 = i * 3;
+                
+                // 使用保存的基础色相（初始化时提取，与初始颜色完全一致）
+                const baseHue = baseHues[i];
+                
+                // 计算最终色相（循环0-360度）
+                const hue = (baseHue + timeOffset) % 360;
+                
+                // 使用保存的固定亮度值（初始化时确定，永不改变）
+                const lightness = lightnesses[i];
+                
+                // 应用新颜色（只改变色相，保持固定亮度和饱和度）
+                const color = new THREE.Color().setHSL(hue / 360, 1.0, lightness);
+                colors[i3] = color.r;
+                colors[i3 + 1] = color.g;
+                colors[i3 + 2] = color.b;
+            }
+            
+            system.geometry.attributes.color.needsUpdate = true;
+        }
+        
+        // 更新粒子系统
+        function updateParticleSystem(system, isActive) {
+            const positions = system.geometry.attributes.position.array;
+            const velocities = system.geometry.attributes.velocity.array;
+            const targets = system.userData.targets;
+            const centerX = system.userData.centerX;
+            const particleCount = targets.length;
+            
+            // 两组粒子行为完全同步，不管是否活跃
+            if (isDispercing) {
+                // 散开 - 往中心球体(0,0,0)散开
+                // disperseTarget已经在散开开始时生成好了
+                for (let i = 0; i < particleCount; i++) {
+                    const i3 = i * 3;
+                    
+                    if (!system.userData.disperseTarget || !system.userData.disperseTarget[i]) {
+                        // 如果没有目标（不应该发生），跳过
+                        continue;
+                    }
+                    
+                    const target = system.userData.disperseTarget[i];
+                    const dx = target.x - positions[i3];
+                    const dy = target.y - positions[i3 + 1];
+                    const dz = target.z - positions[i3 + 2];
+                    const distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
+                    
+                    if (distance < 0.5) {
+                        // 足够接近，停止移动（不对齐位置）
+                        velocities[i3] = 0;
+                        velocities[i3 + 1] = 0;
+                        velocities[i3 + 2] = 0;
+                        // 不修改position
+                    } else {
+                        // 向目标点移动
+                        const accelFactor = distance > 20 ? 0.008 : 
+                                          distance > 5 ? 0.004 : 0.002;
+                        velocities[i3] += dx * accelFactor;
+                        velocities[i3 + 1] += dy * accelFactor;
+                        velocities[i3 + 2] += dz * accelFactor;
+                        velocities[i3] *= 0.82;
+                        velocities[i3 + 1] *= 0.82;
+                        velocities[i3 + 2] *= 0.82;
+                        positions[i3] += velocities[i3];
+                        positions[i3 + 1] += velocities[i3 + 1];
+                        positions[i3 + 2] += velocities[i3 + 2];
+                    }
+                }
+            } else {
+                // 汇聚 - 两组都汇聚到各自的目标位置
+                // 清除散开目标
+                system.userData.disperseTarget = null;
+                
+                // 初始化汇聚开始时间（如果还没有）
+                if (!system.userData.convergeStartTime) {
+                    system.userData.convergeStartTime = Date.now();
+                }
+                
+                const convergeElapsed = Date.now() - system.userData.convergeStartTime;
+                
+                let allReached = true;
+                for (let i = 0; i < particleCount; i++) {
+                    const i3 = i * 3;
+                    const target = targets[i];
+                    const targetX = centerX + target.x;
+                    const targetY = target.y;
+                    const targetZ = target.z;
+                    
+                    // 计算延迟：按粒子X位置动态估算字母索引
+                    let letterIndex = 0;
+                    if (system.userData.xMin === undefined) {
+                        system.userData.xMin = targets.reduce((m,t) => Math.min(m, t.x), Infinity);
+                        system.userData.xMax = targets.reduce((m,t) => Math.max(m, t.x), -Infinity);
+                    }
+                    const xMin = system.userData.xMin;
+                    const xMax = system.userData.xMax;
+                    const xRange = xMax - xMin || 1;
+                    const estimatedLetters = Math.max(1, Math.round(xRange / 10));
+                    letterIndex = Math.round(((target.x - xMin) / xRange) * (estimatedLetters - 1));
+                    letterIndex = Math.max(0, letterIndex);
+                    const totalDelay = letterIndex * 150;
+                    
+                    // 如果还没到这个字母的启动时间，跳过
+                    if (convergeElapsed < totalDelay) {
+                        allReached = false;
+                        continue;
+                    }
+                    
+                    const dx = targetX - positions[i3];
+                    const dy = targetY - positions[i3 + 1];
+                    const dz = targetZ - positions[i3 + 2];
+                    const distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
+                    
+                    if (distance < 0.5) {
+                        // 足够接近，停止移动（不对齐位置）
+                        velocities[i3] = 0;
+                        velocities[i3 + 1] = 0;
+                        velocities[i3 + 2] = 0;
+                        // 不修改position，让粒子停在当前位置
+                    } else {
+                        allReached = false;
+                        // 根据距离动态调整加速度
+                        const accelFactor = distance > 50 ? 0.006 : 
+                                          distance > 10 ? 0.004 : 
+                                          distance > 2 ? 0.002 : 0.001;
+                        velocities[i3] += dx * accelFactor;
+                        velocities[i3 + 1] += dy * accelFactor;
+                        velocities[i3 + 2] += dz * accelFactor;
+                        velocities[i3] *= 0.82;
+                        velocities[i3 + 1] *= 0.82;
+                        velocities[i3 + 2] *= 0.82;
+                        positions[i3] += velocities[i3];
+                        positions[i3 + 1] += velocities[i3 + 1];
+                        positions[i3 + 2] += velocities[i3 + 2];
+                    }
+                }
+                
+                // 只有活跃系统才更新isFormed状态
+                if (isActive && allReached && !system.userData.isFormed) {
+                    // 检查是否真的稳定形成（避免闪动）
+                    if (!system.userData.almostFormed) {
+                        system.userData.almostFormed = Date.now();
+                    } else if (Date.now() - system.userData.almostFormed > 200) {
+                        // 稳定200ms后才确认形成
+                        system.userData.isFormed = true;
+                        system.userData.formedTime = Date.now();
+                        system.userData.almostFormed = null;
+                        console.log('✅ 粒子已形成目标', currentTarget);
+                    }
+                } else if (!allReached) {
+                    // 如果又有粒子离开了，重置almostFormed
+                    system.userData.almostFormed = null;
+                }
+            }
+            
+            system.geometry.attributes.position.needsUpdate = true;
+            system.geometry.attributes.velocity.needsUpdate = true;
+        }
+        
+        // 动画循环
+        function animate() {
+            requestAnimationFrame(animate);
+            if (!isInitialized) return;
+            
+            analyzeAudio();
+            
+            const currentTime = Date.now();
+            
+            // 自动切换逻辑 - 摄像机追踪到中心点
+            const activeSystem = currentTarget === 1 ? particleSystem1 : particleSystem2;
+            
+            if (activeSystem.userData.isFormed && !isDispercing) {
+                // 阶段0: 展示完成，准备散开
+                const timeSinceFormed = currentTime - (activeSystem.userData.formedTime || 0);
+                if (timeSinceFormed > DISPLAY_TIME) {
+                    // 开始散开阶段
+                    isDispercing = true;
+                    activeSystem.userData.isFormed = false;
+                    
+                    // 清除汇聚开始时间，为下次汇聚做准备
+                    particleSystem1.userData.convergeStartTime = null;
+                    particleSystem2.userData.convergeStartTime = null;
+                    
+                    // 立即为两组粒子生成散开目标
+                    generateDisperseTargets(particleSystem1);
+                    generateDisperseTargets(particleSystem2);
+                    
+                    // 摄像机追踪到中心(0, 0)
+                    cameraTargetX = 0;
+                    cameraTargetY = 0;
+                    lastToggleTime = currentTime;
+                    console.log('🔄 阶段1: 开始散开，摄像机移动到中心(0,0)');
+                }
+            } else if (isDispercing && currentTime - lastToggleTime > DISPERSE_TIME) {
+                // 阶段1: 散开完成，准备汇聚
+                isDispercing = false;
+                currentTarget = currentTarget === 1 ? 2 : 1; // 切换目标
+                
+                // 摄像机从中心(0,0)开始移动到目标字母位置
+                cameraTargetX = currentTarget === 1 ? CENTER1.x : CENTER2.x;
+                cameraTargetY = 0;
+                lastToggleTime = currentTime;
+                console.log('🔄 阶段2: 散开完成，汇聚开始，摄像机从(0,0)移动到', cameraTargetX);
+            }
+            
+            // 更新两个粒子系统 - 两组完全同步运动
+            updateParticleSystem(particleSystem1, currentTarget === 1);
+            updateParticleSystem(particleSystem2, currentTarget === 2);
+            
+            // 彩虹流动效果 - 基于时间更新所有粒子颜色
+            updateRainbowColors(particleSystem1, targetPositions1);
+            updateRainbowColors(particleSystem2, targetPositions2);
+            
+            // 粒子大小固定为0.5，不随音乐变化
+            particleSystem1.material.size = 0.5;
+            particleSystem2.material.size = 0.5;
+            
+            // 平滑摄像机转换
+            // 散开阶段: 从±120移动到0 (2秒内完成120单位)
+            // 汇聚阶段: 从0移动到±120 (2秒内完成120单位)
+            // 速度0.05可以在2秒内完成约95%的移动
+            const transitionSpeed = 0.05;
+            cameraCurrentX += (cameraTargetX - cameraCurrentX) * transitionSpeed;
+            cameraCurrentY += (cameraTargetY - cameraCurrentY) * transitionSpeed;
+            
+            // 摄像机环绕旋转 + 音乐驱动的Z轴抖动
+            const time = Date.now() * 0.001;
+            const radius = 50;
+            const rotationSpeed = 0.1;
+            
+            // 基础Z位置
+            const baseZ = radius + Math.cos(time * rotationSpeed) * radius * 0.3;
+            
+            // 音乐驱动的Z轴偏移（向负方向）
+            // 响度越大，摄像机离粒子越近（Z越小）
+            // 静音时偏移为0，最大响度时向负方向偏移20单位
+            const zOffset = isPlaying ? -overallLevel * 20 : 0;
+            
+            camera.position.x = cameraCurrentX + Math.sin(time * rotationSpeed) * radius * 0.3;
+            camera.position.y = cameraCurrentY + Math.sin(time * rotationSpeed * 0.7) * 5;
+            camera.position.z = baseZ + zOffset;
+            camera.lookAt(cameraCurrentX, cameraCurrentY, 0);
+            
+            renderer.render(scene, camera);
+        }
+        
+        function onWindowResize() {
+            // iOS Safari 用 visualViewport 获取真实可见区域尺寸
+            const w = window.visualViewport ? window.visualViewport.width  : window.innerWidth;
+            const h = window.visualViewport ? window.visualViewport.height : window.innerHeight;
+            camera.aspect = w / h;
+            camera.updateProjectionMatrix();
+            renderer.setSize(w, h);
+        }
+
+        // iOS 旋转时同时触发 orientationchange，有时不触发 resize
+        window.addEventListener('orientationchange', () => {
+            // 旋转完成后延迟一帧再取尺寸，否则拿到的还是旋转前的值
+            setTimeout(onWindowResize, 200);
+        });
+        if (window.visualViewport) {
+            window.visualViewport.addEventListener('resize', onWindowResize);
+        }
+        
+        // ── 重建粒子系统（应用新文字后调用）─────────────────────────────
+
+        function rebuildParticleSystems(lines1, lines2) {
+            if (!isInitialized) return;
+            scene.remove(particleSystem1);
+            scene.remove(particleSystem2);
+            particleSystem1.geometry.dispose();
+            particleSystem2.geometry.dispose();
+            particleSystem1.material.dispose();
+            particleSystem2.material.dispose();
+
+            targetPositions1 = generatePoints(lines1);
+            targetPositions2 = generatePoints(lines2);
+
+            particleSystem1 = createParticleSystem(targetPositions1, CENTER1.x, true);
+            particleSystem2 = createParticleSystem(targetPositions2, CENTER2.x, true);
+            particleSystem1.userData.xMin = undefined;
+            particleSystem2.userData.xMin = undefined;
+
+            // 粒子已在散开位置，直接开始汇聚
+            const now = Date.now();
+            particleSystem1.userData.convergeStartTime = now;
+            particleSystem2.userData.convergeStartTime = now;
+            currentTarget = 1;
+            isDispercing = false;
+            lastToggleTime = now;
+            cameraTargetX = CENTER1.x;
+            cameraCurrentX = CENTER1.x;
+            cameraTargetY = 0;
+            cameraCurrentY = 0;
+            camera.position.set(CENTER1.x, 0, 50);
+            camera.lookAt(CENTER1.x, 0, 0);
+
+            scene.add(particleSystem1);
+            scene.add(particleSystem2);
+
+            console.log('🔄 粒子系统已重建', lines1, lines2);
+        }
+
+        // ── 模态框 UI 逻辑 ──────────────────────────────────────────────
+        const editBtn       = document.getElementById('edit-btn');
+        const modalOverlay  = document.getElementById('modal-overlay');
+        const btnCancel     = document.getElementById('btn-cancel');
+        const btnApply      = document.getElementById('btn-apply');
+        const input1        = document.getElementById('input1');
+        const input2        = document.getElementById('input2');
+
+        // 预填当前值
+        input1.value = '1234567890\nlazy dogs jump\nover the quick\nbrown fox.';
+        input2.value = '两个黄鹂鸣翠柳\n一行白鹭上青天\n窗含西岭千秋雪\n门泊东吴万里船';
+
+        function getLines(textarea) {
+            return textarea.value.split('\n')
+                .map(l => l.trim())
+                .filter(l => l.length > 0)
+                .slice(0, 4);
+        }
+
+        // 汉字算2个宽度单位，英文/数字/空格算1个
+        function visualWidth(str) {
+            let w = 0;
+            for (const ch of str) {
+                w += /[\u3000-\u9fff\uf900-\ufaff\ufe30-\ufe4f\uff00-\uffef]/.test(ch) ? 2 : 1;
+            }
+            return w;
+        }
+
+        function renderCounters(textarea, containerId) {
+            const lines = getLines(textarea);
+            const container = document.getElementById(containerId);
+            container.innerHTML = '';
+            lines.forEach((line, i) => {
+                const w = visualWidth(line);
+                const pct = Math.min(w / MAX_CHARS * 100, 100);
+                const barClass = w > MAX_CHARS ? 'over' : w >= MAX_CHARS * 0.85 ? 'warn' : '';
+                const numClass = w > MAX_CHARS ? 'over' : '';
+                container.innerHTML += `
+                  <div class="char-row">
+                    <span class="line-label">L${i+1}</span>
+                    <div class="char-bar-wrap"><div class="char-bar ${barClass}" style="width:${pct}%"></div></div>
+                    <span class="char-count-num ${numClass}">${w}/${MAX_CHARS}</span>
+                  </div>`;
+            });
+        }
+
+        function validate(textarea, errorId) {
+            const lines = getLines(textarea);
+            const errEl = document.getElementById(errorId);
+            if (lines.length === 0) {
+                errEl.textContent = '⚠ 至少需要输入一行文字';
+                textarea.classList.add('error');
+                return false;
+            }
+            const over = lines.find(l => visualWidth(l) > MAX_CHARS);
+            if (over) {
+                errEl.textContent = `⚠ "${over.slice(0,8)}…" 超过宽度限制（汉字占2，英文占1）`;
+                textarea.classList.add('error');
+                return false;
+            }
+            errEl.textContent = '';
+            textarea.classList.remove('error');
+            return true;
+        }
+
+        function checkApplyBtn() {
+            const ok = validate(input1, 'error1') & validate(input2, 'error2');
+            btnApply.disabled = !ok;
+        }
+
+        // 阻止 textarea 内 Enter 触发提交，但限制最多2行
+        [input1, input2].forEach((ta, idx) => {
+            ta.addEventListener('keydown', e => {
+                if (e.key === 'Enter') {
+                    const lines = ta.value.split('\n').filter(l => l.trim().length > 0);
+                    if (lines.length >= 4) {
+                        e.preventDefault(); // 已有4行，不允许再换行
+                    }
+                }
+            });
+            ta.addEventListener('input', () => {
+                renderCounters(ta, `counters${idx+1}`);
+                checkApplyBtn();
+            });
+        });
+
+        editBtn.addEventListener('click', () => {
+            renderCounters(input1, 'counters1');
+            renderCounters(input2, 'counters2');
+            checkApplyBtn();
+            modalOverlay.classList.add('visible');
+        });
+        btnCancel.addEventListener('click', () => {
+            modalOverlay.classList.remove('visible');
+        });
+        modalOverlay.addEventListener('click', e => {
+            if (e.target === modalOverlay) modalOverlay.classList.remove('visible');
+        });
+        btnApply.addEventListener('click', () => {
+            if (btnApply.disabled) return;
+            const lines1 = getLines(input1);
+            const lines2 = getLines(input2);
+            modalOverlay.classList.remove('visible');
+            rebuildParticleSystems(lines1, lines2);
+        });
+
+        function startApp() {
+            const preload = document.getElementById('font-preload');
+            if (preload) preload.remove();
+            init();
+            isInitialized = true;
+            renderCounters(input1, 'counters1');
+            renderCounters(input2, 'counters2');
+            animate();
+        }
+
+        // 阻止 UI 元素的触摸事件冒泡，避免 iOS 上误触全屏切换等手势
+        ['.music-controls', '#edit-btn', '#modal-overlay'].forEach(sel => {
+            const el = document.querySelector(sel);
+            if (!el) return;
+            el.addEventListener('touchstart', e => e.stopPropagation(), { passive: true });
+            el.addEventListener('touchend',   e => e.stopPropagation(), { passive: true });
+            el.addEventListener('touchmove',  e => e.stopPropagation(), { passive: true });
+        });
+
+        // 等 Noto Sans SC 加载完再启动，最多等3秒，超时用系统字体兜底
+        const fontReady = Promise.race([
+            document.fonts.load('300 100px "Noto Sans SC"', '两个黄鹂鸣翠柳lazy dogs'),
+            new Promise(resolve => setTimeout(resolve, 3000))
+        ]);
+        fontReady.catch(() => {}).finally(() => startApp());
+    </script>
+</body>
+</html>
